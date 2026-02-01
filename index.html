@@ -699,6 +699,39 @@ x³ - 1 = (x - 1)(x² + x + 1)
                 <p>Hence the unit behaves like a cubic root of unity mod 4, producing the <strong>period-3 pattern</strong>.</p>
             </div>
         </section>
+
+        <section>
+            <h2>8. The Hyperbola Picture (Minkowski Embedding)</h2>
+
+            <p>The identity <code>δₖ⁻ⁿ = √(M+1) − √M</code> can be seen geometrically in a plane: set <code>x = δₖⁿ</code> and <code>y = δₖ⁻ⁿ</code>. Then <code>xy = 1</code>, so the point <code>(x,y)</code> lies on the hyperbola <code>xy = 1</code>.</p>
+
+            <div class="interactive-panel">
+                <div class="control-row">
+                    <div class="control">
+                        <label for="hyp-k">Parameter k</label>
+                        <input type="number" id="hyp-k" min="1" max="20" value="2" oninput="drawHyperbola()">
+                    </div>
+                    <div class="control">
+                        <label for="hyp-n">Exponent n</label>
+                        <input type="number" id="hyp-n" min="1" max="24" value="6" oninput="drawHyperbola()">
+                    </div>
+                    <div class="control">
+                        <label for="hyp-nmax">Show points up to N</label>
+                        <input type="range" id="hyp-nmax" min="6" max="60" value="24" oninput="drawHyperbola()">
+                        <div class="range-value" id="hyp-nmax-display">24</div>
+                    </div>
+                </div>
+
+                <div class="visualization-area">
+                    <canvas id="hyperbola-canvas"></canvas>
+                    <p class="viz-caption" id="hyperbola-caption"></p>
+                </div>
+
+                <div class="note">
+                    <strong>How to read this:</strong> each point corresponds to <code>(x,y) = (δₖⁿ, δₖ⁻ⁿ)</code> on the curve <code>xy = 1</code>. The highlighted point shows your chosen exponent <code>n</code>. For even <code>k</code>, every point corresponds to an integer <code>M</code>; for odd <code>k</code>, only every third point does.
+                </div>
+            </div>
+        </section>
     </div>
 
     <script>
@@ -930,9 +963,136 @@ x³ - 1 = (x - 1)(x² + x + 1)
             document.getElementById(tabName).classList.add('active');
         }
         
+        function drawHyperbola() {
+            const k = parseInt(document.getElementById('hyp-k').value);
+            const n = parseInt(document.getElementById('hyp-n').value);
+            const nMax = parseInt(document.getElementById('hyp-nmax').value);
+            document.getElementById('hyp-nmax-display').textContent = nMax;
+
+            const delta = metallicMean(k);
+
+            const canvas = document.getElementById('hyperbola-canvas');
+            const ctx = canvas.getContext('2d');
+
+            // HiDPI
+            const wCss = canvas.offsetWidth;
+            const hCss = 320;
+            canvas.style.height = hCss + "px";
+            canvas.width = Math.floor(wCss * 2);
+            canvas.height = Math.floor(hCss * 2);
+            ctx.setTransform(2, 0, 0, 2, 0, 0);
+
+            ctx.clearRect(0, 0, wCss, hCss);
+
+            // We draw in log-coordinates to keep the curve and points visible:
+            // Let u = log(x), v = log(y). Then xy=1 becomes v = -u (a line).
+            // Points (δ^m, δ^{-m}) become (m log δ, -m log δ) on that line.
+            const L = Math.log(delta);
+
+            // View window in (u,v)
+            const pad = 34;
+            const uMax = Math.max(3, nMax * L * 1.05); // ensure room
+            const uMin = -uMax;
+            const vMin = -uMax;
+            const vMax = uMax;
+
+            function UtoX(u) {
+                return pad + (u - uMin) * (wCss - 2 * pad) / (uMax - uMin);
+            }
+            function VtoY(v) {
+                // screen y is downward
+                return pad + (vMax - v) * (hCss - 2 * pad) / (vMax - vMin);
+            }
+
+            // Draw axes
+            ctx.strokeStyle = "#e6e1d8";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            // u-axis (v=0)
+            ctx.moveTo(UtoX(uMin), VtoY(0));
+            ctx.lineTo(UtoX(uMax), VtoY(0));
+            // v-axis (u=0)
+            ctx.moveTo(UtoX(0), VtoY(vMin));
+            ctx.lineTo(UtoX(0), VtoY(vMax));
+            ctx.stroke();
+
+            // Label axes
+            ctx.fillStyle = "#6b5d52";
+            ctx.font = "12px JetBrains Mono";
+            ctx.textAlign = "left";
+            ctx.fillText("u = log x", UtoX(uMin) + 4, VtoY(0) - 8);
+            ctx.fillText("v = log y", UtoX(0) + 8, VtoY(vMax) + 14);
+
+            // Draw the hyperbola xy=1 as v=-u (a line in log-space)
+            ctx.strokeStyle = "#b85a00";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(UtoX(uMin), VtoY(-uMin));
+            ctx.lineTo(UtoX(uMax), VtoY(-uMax));
+            ctx.stroke();
+
+            // Ticks on the line for m = 1..nMax
+            // We'll draw points (u_m, v_m) = (mL, -mL)
+            function validExponent(m, kVal) {
+                return (kVal % 2 === 0) || (m % 3 === 0);
+            }
+
+            for (let m = 1; m <= nMax; m++) {
+                const u = m * L;
+                const v = -m * L;
+
+                const x = UtoX(u);
+                const y = VtoY(v);
+
+                // Choose style: valid vs invalid
+                const ok = validExponent(m, k);
+
+                // subtle points
+                ctx.globalAlpha = ok ? 0.9 : 0.25;
+                ctx.fillStyle = ok ? "#b85a00" : "#7a8894";
+
+                ctx.beginPath();
+                ctx.arc(x, y, m === n ? 5 : 3, 0, 2 * Math.PI);
+                ctx.fill();
+            }
+            ctx.globalAlpha = 1;
+
+            // Highlight chosen point with annotation
+            const uN = n * L;
+            const vN = -n * L;
+            const xN = UtoX(uN);
+            const yN = VtoY(vN);
+
+            ctx.strokeStyle = "#1c1815";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(xN, yN, 8, 0, 2 * Math.PI);
+            ctx.stroke();
+
+            // Caption with the actual (x,y) and the sqrt-difference representation when valid
+            const xVal = Math.pow(delta, n);
+            const yVal = Math.pow(delta, -n);
+            const okN = validExponent(n, k);
+            const M = computeM(n, k);
+            const Mtxt = okN ? `${Math.round(M)}` : `${M.toFixed(4)}`;
+
+            const caption = document.getElementById('hyperbola-caption');
+            if (okN) {
+                const Mi = Math.round(M);
+                caption.textContent =
+                    `Point (x,y) = (δₖⁿ, δₖ⁻ⁿ) lies on xy=1. Here k=${k}, n=${n}: ` +
+                    `δₖ⁻ⁿ = √${Mi + 1} − √${Mi} (M = ${Mi}).`;
+            } else {
+                caption.textContent =
+                    `Point (x,y) = (δₖⁿ, δₖ⁻ⁿ) lies on xy=1. Here k=${k}, n=${n}: ` +
+                    `M = (δₖ²ⁿ + δₖ⁻²ⁿ − 2)/4 = ${Mtxt} is not an integer, so no consecutive-surd form.`;
+            }
+        }
+        
         // Initialize
         generateSequence();
         compute();
+        drawHyperbola();
     </script>
 </body>
 </html>
